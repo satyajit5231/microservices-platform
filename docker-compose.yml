@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  postgres-inventory:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: inventory_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - inventory-data:/var/lib/postgresql/data
+
+  postgres-order:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: order_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - order-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  inventory-service:
+    build: ./inventory-service
+    ports:
+      - "8081:8081"
+    environment:
+      DB_PASSWORD: postgres
+      REDIS_HOST: redis
+      JWT_SECRET: satyajeet_microservices_secret_key_2026
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-inventory:5432/inventory_db
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://api-gateway:8080/eureka/
+    depends_on:
+      - postgres-inventory
+      - redis
+
+  order-service:
+    build: ./order-service
+    ports:
+      - "8082:8082"
+    environment:
+      DB_PASSWORD: postgres
+      JWT_SECRET: satyajeet_microservices_secret_key_2026
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-order:5432/order_db
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://api-gateway:8080/eureka/
+      INVENTORY_SERVICE_URL: http://inventory-service:8081
+    depends_on:
+      - postgres-order
+      - inventory-service
+
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "8083:8083"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://api-gateway:8080/eureka/
+    depends_on:
+      - order-service
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      JWT_SECRET: satyajeet_microservices_secret_key_2026
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://api-gateway:8080/eureka/
+    depends_on:
+      - inventory-service
+      - order-service
+      - notification-service
+
+volumes:
+  inventory-data:
+  order-data:
